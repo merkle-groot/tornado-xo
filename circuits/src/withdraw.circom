@@ -24,7 +24,6 @@ template Withdraw(n) {
     signal input root;
     signal input merkleSiblings[n];
     signal input merkleSiblingIsLeft[n];
-	signal input levelsUsed;
 
     // signature
     signal input signatureR[2];
@@ -32,12 +31,14 @@ template Withdraw(n) {
 
     // transfer
     signal input amountWithdrawal;
-    signal input amountSent;
+    signal input amountChange;
 
     // receiver 
     signal input receiverCommitment0;
     signal input receiverPub[2];
     signal input receiverNullifier0;
+
+    signal output isValid;
 
     /////////////////////
     // Signature Check //
@@ -71,7 +72,7 @@ template Withdraw(n) {
     // Receiver Commitment Check //
     ///////////////////////////////
     component commitmentCheckerReceiver0 = CommitmentChecker();
-    commitmentCheckerReceiver0.amount <== amountSent;
+    commitmentCheckerReceiver0.amount <== amountChange;
     commitmentCheckerReceiver0.pub[0] <== receiverPub[0];
     commitmentCheckerReceiver0.pub[1] <== receiverPub[1];
     commitmentCheckerReceiver0.nullifier <== receiverNullifier0;
@@ -83,7 +84,6 @@ template Withdraw(n) {
     component merkleChecker = MerkleChecker(n);
     merkleChecker.element <== senderCommitment0;
     merkleChecker.root <== root;
-    merkleChecker.levelsUsed <== levelsUsed;
     for (var i = 0; i < n; i++) {
         merkleChecker.merkleSiblings[i] <== merkleSiblings[i];
         merkleChecker.merkleSiblingIsLeft[i] <== merkleSiblingIsLeft[i];
@@ -92,7 +92,8 @@ template Withdraw(n) {
     //////////////////
     // Amount Check //
     //////////////////
-    amount === amountWithdrawal + amountSent;
+    amount === amountWithdrawal + amountChange;
+    isValid <== 42;
 }
 
-component main = Withdraw(32);
+component main{public [root, senderCommitment0, senderNullifierHash0, receiverCommitment0, amountWithdrawal]} = Withdraw(4);

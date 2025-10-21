@@ -1,4 +1,4 @@
-const hash = require("./poseidon.cjs");
+const { hash } = require("./poseidon.cjs");
 const DEFAULT_ZERO = 19014214495641488759237505126948346942972912379615652741039992445865937985820n;
 
 class MerkleTree {
@@ -62,6 +62,7 @@ class MerkleTree {
     async _insert(element, index) {
         this._layers[0][index] = element;
         for(let i = 1; i <= this.levels; ++i){
+            console.log("debug, level: ", i);
             this._layers[i] = this._layers[i] ? this._layers[i]: [];
             index >>= 1;
             this._layers[i][index] = await this._hash(
@@ -120,41 +121,9 @@ class MerkleTree {
     }
 
     getRoot() {
-        return this._layers[this.levels].length != 0 ? this._layers[this.levels][0] : this._zeroSubTrees[this.levels];
+        return this._layers[0].length != 0 ? this._layers[this.levels][0] : this._zeroSubTrees[this.levels];
     }
 }
 
-
-// (async () => {
-//     let tree = new MerkleTree(32);
-//     await tree.init();
-
-//     // // Option 1: Use JSON.stringify with depth
-//     // console.log('Tree serialized:', JSON.stringify(tree.serialize(), null, 2));
-
-//     // // Option 2: Use console.dir with full depth
-//     // console.dir(tree.serialize(), { depth: null });
-
-//     // // Option 3: Log specific parts
-//     // const serialized = tree.serialize();
-//     // console.log('Levels:', serialized.levels);
-//     // console.log('Zero hashes length:', serialized._zeros.length);
-//     // console.log('First few zero hashes:', serialized._zeros.slice(0, 5));
-//     // console.log('Layers length:', serialized._layers.length);
-//     // console.log('First layer (leaf level):', serialized._layers[0]);
-//     // console.log('Root hash (last layer):', serialized._layers[serialized._layers.length - 1]);
-
-//     await tree.insert(0x1);
-//     await tree.insert(0x2);
-//     await tree.insert(0x3);
-
-//     // console.log('\nAfter insertions:');
-//     console.log(tree.serialize(), { depth: null });
-//     let index = tree.getIndex(0x1);
-//     console.log(index);
-//     console.log(tree.getPath(index));
-// })();
-
-
-
+module.exports = MerkleTree;
 

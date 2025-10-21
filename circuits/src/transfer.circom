@@ -109,4 +109,4 @@ template Transfer(n) {
     amount === amountBack + amountSent;
 }
 
-component main = Transfer(32);
+component main = Transfer(4);

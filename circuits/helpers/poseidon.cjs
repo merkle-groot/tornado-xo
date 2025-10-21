@@ -5,6 +5,15 @@ async function initializePoseidon() {
     poseidon = await buildPoseidon();
 }
 
+async function hashN(elements) {
+    if (!poseidon) {
+        await initializePoseidon();
+    }
+    const bytesResult = await poseidon(elements);
+    const bigIntHash = await poseidon.F.toObject(bytesResult);
+    return bigIntHash;
+}
+
 // Hash n field elements
 async function hash(left, right) {
     console.log("hashing data: ", left, right);
@@ -16,4 +25,7 @@ async function hash(left, right) {
     return bigIntHash;
 }
 
-module.exports = hash;
+module.exports = {
+    hash,
+    hashN
+};
