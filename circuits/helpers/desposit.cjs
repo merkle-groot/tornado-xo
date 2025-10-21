@@ -7,7 +7,7 @@ async function getCommitment(amount, keypair, nullifier) {
             1337n,
             keypair["publicKey"][0], 
             keypair["publicKey"][1], 
-            BigInt(nullifier)
+            nullifier
         ]
     );
 

@@ -2,6 +2,7 @@ pragma circom 2.0.4;
 
 include "../../node_modules/circomlib/circuits/eddsaposeidon.circom";
 include "../../node_modules/circomlib/circuits/poseidon.circom";
+include "../../node_modules/circomlib/circuits/sign.circom";
 include "./merkleChecker.circom";
 include "./commitmentChecker.circom";
 
