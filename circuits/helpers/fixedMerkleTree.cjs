@@ -1,209 +1,160 @@
-// keccak256("tornado") % BN254_FIELD_SIZE
-const DEFAULT_ZERO = '19014214495641488759237505126948346942972912379615652741039992445865937985820'
-const poseidon = require('./poseidon.cjs')
-const defaultHash = poseidon.hash
+const hash = require("./poseidon.cjs");
+const DEFAULT_ZERO = 19014214495641488759237505126948346942972912379615652741039992445865937985820n;
 
-// todo ensure consistent types in tree and inserted elements?
-// todo make sha3 default hasher (and update tests) to get rid of mimc/snarkjs/circomlib dependency
-
-/**
- * @callback hashFunction
- * @param left Left leaf
- * @param right Right leaf
- */
-/**
- * Merkle tree
- */
 class MerkleTree {
-  /**
-   * Constructor
-   * @param {number} levels Number of levels in the tree
-   * @param {Array} [elements] Initial elements
-   * @param {Object} options
-   * @param {hashFunction} [options.hashFunction] Function used to hash 2 leaves
-   * @param [options.zeroElement] Value for non-existent leaves
-   */
-  constructor(levels, elements = [], { hashFunction, zeroElement = DEFAULT_ZERO } = {}) {
-    this.levels = levels
-    this.capacity = 2 ** levels
-    if (elements.length > this.capacity) {
-      throw new Error('Tree is full')
+    constructor(levels, hashFn = hash, zeroHash = DEFAULT_ZERO) {
+        this.levels = levels;   
+        this.capacity = 2 ** levels;
+        this._hash = hashFn;
+        this.zeroHash = zeroHash;
+        this._zeroSubTrees = [zeroHash];
+        this._layers = [];
+        this._layers[0] = [];
     }
-    this._hash = hashFunction || defaultHash
-    this.zeroElement = zeroElement
-    this._zeros = []
-    this._zeros[0] = zeroElement
-    for (let i = 1; i <= levels; i++) {
-      this._zeros[i] = this._hash(this._zeros[i - 1], this._zeros[i - 1])
-    }
-    this._layers = []
-    this._layers[0] = elements.slice()
-    this._rebuild()
-  }
 
-  _rebuild() {
-    for (let level = 1; level <= this.levels; level++) {
-      this._layers[level] = []
-      for (let i = 0; i < Math.ceil(this._layers[level - 1].length / 2); i++) {
-        this._layers[level][i] = this._hash(
-          this._layers[level - 1][i * 2],
-          i * 2 + 1 < this._layers[level - 1].length
-            ? this._layers[level - 1][i * 2 + 1]
-            : this._zeros[level - 1],
-        )
-      }
+    async init() {
+        for(let i = 1; i <= this.levels; ++i){
+            this._zeroSubTrees[i] = await this._hash(
+                this._zeroSubTrees[i-1],
+                this._zeroSubTrees[i-1]
+            )
+        }
     }
-  }
 
-  /**
-   * Get tree root
-   * @returns {*}
-   */
-  root() {
-    return this._layers[this.levels].length > 0 ? this._layers[this.levels][0] : this._zeros[this.levels]
-  }
+    async insert(element) {
+        let index = this._layers[0].length;
+        if(index >= this.capacity){
+            throw new Error('Tree is full');
+        }
 
-  /**
-   * Insert new element into the tree
-   * @param element Element to insert
-   */
-  insert(element) {
-    if (this._layers[0].length >= this.capacity) {
-      throw new Error('Tree is full')
+        await this._insert(element, index);
     }
-    this.update(this._layers[0].length, element)
-  }
 
-  /**
-   * Insert multiple elements into the tree.
-   * @param {Array} elements Elements to insert
-   */
-  bulkInsert(elements) {
-    if (this._layers[0].length + elements.length > this.capacity) {
-      throw new Error('Tree is full')
-    }
-    // First we insert all elements except the last one
-    // updating only full subtree hashes (all layers where inserted element has odd index)
-    // the last element will update the full path to the root making the tree consistent again
-    for (let i = 0; i < elements.length - 1; i++) {
-      this._layers[0].push(elements[i])
-      let level = 0
-      let index = this._layers[0].length - 1
-      while (index % 2 === 1) {
-        level++
-        index >>= 1
-        this._layers[level][index] = this._hash(
-          this._layers[level - 1][index * 2],
-          this._layers[level - 1][index * 2 + 1],
-        )
-      }
-    }
-    this.insert(elements[elements.length - 1])
-  }
+    async bulkInsert(elements) {
+        if(elements.length + this._layers[0].length > this.capacity){
+            throw new Error('Tree is full');
+        }
 
-  /**
-   * Change an element in the tree
-   * @param {number} index Index of element to change
-   * @param element Updated element value
-   */
-  update(index, element) {
-    if (isNaN(Number(index)) || index < 0 || index > this._layers[0].length || index >= this.capacity) {
-      throw new Error('Insert index out of bounds: ' + index)
-    }
-    this._layers[0][index] = element
-    for (let level = 1; level <= this.levels; level++) {
-      index >>= 1
-      this._layers[level][index] = this._hash(
-        this._layers[level - 1][index * 2],
-        index * 2 + 1 < this._layers[level - 1].length
-          ? this._layers[level - 1][index * 2 + 1]
-          : this._zeros[level - 1],
-      )
-    }
-  }
+        for(let i = 0; i < elements.length - 1; ++i){
+            let index = this._layers[0].length;
+            this._layers[0][index] = elements[i];
 
-  /**
-   * Get merkle path to a leaf
-   * @param {number} index Leaf index to generate path for
-   * @returns {{pathElements: Object[], pathIndex: number[]}} An object containing adjacent elements and left-right index
-   */
-  path(index) {
-    if (isNaN(Number(index)) || index < 0 || index >= this._layers[0].length) {
-      throw new Error('Index out of bounds: ' + index)
-    }
-    const pathElements = []
-    const pathIndices = []
-    for (let level = 0; level < this.levels; level++) {
-      pathIndices[level] = index % 2
-      pathElements[level] =
-        (index ^ 1) < this._layers[level].length ? this._layers[level][index ^ 1] : this._zeros[level]
-      index >>= 1
-    }
-    return {
-      pathElements,
-      pathIndices,
-    }
-  }
+            index >>= 1;
+            for(let i = 1; i <= levels; ++i){
+                if(index % 2 == 0){
+                    break;
+                }
 
-  /**
-   * Find an element in the tree
-   * @param element An element to find
-   * @param comparator A function that checks leaf value equality
-   * @returns {number} Index if element is found, otherwise -1
-   */
-  indexOf(element, comparator) {
-    if (comparator) {
-      return this._layers[0].findIndex((el) => comparator(element, el))
-    } else {
-      return this._layers[0].indexOf(element)
+                this._layers[i][index] = await this._hash(
+                    this._layers[i - 1][2 * index],
+                    this._layers[i - 1][2 * index + 1]
+                );
+            }
+        }
+
+        await this.insert(elements[elements.length - 1]);
     }
-  }
 
-  /**
-   * Returns a copy of non-zero tree elements
-   * @returns {Object[]}
-   */
-  elements() {
-    return this._layers[0].slice()
-  }
-
-  /**
-   * Returns a copy of n-th zero elements array
-   * @returns {Object[]}
-   */
-  zeros() {
-    return this._zeros.slice()
-  }
-
-  /**
-   * Serialize entire tree state including intermediate layers into a plain object
-   * Deserializing it back will not require to recompute any hashes
-   * Elements are not converted to a plain type, this is responsibility of the caller
-   */
-  serialize() {
-    return {
-      levels: this.levels,
-      _zeros: this._zeros,
-      _layers: this._layers,
+    getIndex(element) {
+        return this._layers[0].indexOf(element)
     }
-  }
 
-  /**
-   * Deserialize data into a MerkleTree instance
-   * Make sure to provide the same hashFunction as was used in the source tree,
-   * otherwise the tree state will be invalid
-   *
-   * @param data
-   * @param hashFunction
-   * @returns {MerkleTree}
-   */
-  static deserialize(data, hashFunction) {
-    const instance = Object.assign(Object.create(this.prototype), data)
-    instance._hash = hashFunction || defaultHash
-    instance.capacity = 2 ** instance.levels
-    instance.zeroElement = instance._zeros[0]
-    return instance
-  }
+    async _insert(element, index) {
+        this._layers[0][index] = element;
+        for(let i = 1; i <= this.levels; ++i){
+            this._layers[i] = this._layers[i] ? this._layers[i]: [];
+            index >>= 1;
+            this._layers[i][index] = await this._hash(
+                this._layers[i - 1][2 * index],
+                index * 2 + 1 < this._layers[i - 1].length ?
+                    this._layers[i - 1][2 * index + 1] : this._zeroSubTrees[i - 1]
+            );
+        }
+    }
+
+    serialize() {
+        // Convert BigInt to string for JSON serialization
+        const zerosStr = this._zeroSubTrees.map(val => val.toString());
+        const layersStr = this._layers.map(layer =>
+            layer.map(val => val.toString())
+        );
+
+        return {
+            levels: this.levels,
+            _zeros: zerosStr,
+            _layers: layersStr,
+        }
+    }
+
+    getPath(index) {
+        if(index < 0 || index > this.capacity){
+            throw new Error("invalid index"); 
+        }
+
+        let isLeft = [];
+        let siblings = [];
+        for(let i = 0; i < this.levels; ++i){
+            console.log(index + 1);
+            if(index % 2){
+                isLeft.push(false);
+                siblings.push(this._layers[i][index - 1]);
+            } else {
+                isLeft.push(true);
+                siblings.push(
+                    index + 1 < this._layers[i].length ? 
+                        this._layers[i][index + 1] : this._zeroSubTrees[i]
+                );
+            }
+        }
+
+        index >>= 1;
+
+        return {
+            isLeft,
+            siblings
+        }
+    }
+
+    getLeaves() {
+        return this._layers[0].slice();
+    }
+
+    getRoot() {
+        return this._layers[this.levels].length != 0 ? this._layers[this.levels][0] : this._zeroSubTrees[this.levels];
+    }
 }
 
-module.exports = MerkleTree
+
+// (async () => {
+//     let tree = new MerkleTree(32);
+//     await tree.init();
+
+//     // // Option 1: Use JSON.stringify with depth
+//     // console.log('Tree serialized:', JSON.stringify(tree.serialize(), null, 2));
+
+//     // // Option 2: Use console.dir with full depth
+//     // console.dir(tree.serialize(), { depth: null });
+
+//     // // Option 3: Log specific parts
+//     // const serialized = tree.serialize();
+//     // console.log('Levels:', serialized.levels);
+//     // console.log('Zero hashes length:', serialized._zeros.length);
+//     // console.log('First few zero hashes:', serialized._zeros.slice(0, 5));
+//     // console.log('Layers length:', serialized._layers.length);
+//     // console.log('First layer (leaf level):', serialized._layers[0]);
+//     // console.log('Root hash (last layer):', serialized._layers[serialized._layers.length - 1]);
+
+//     await tree.insert(0x1);
+//     await tree.insert(0x2);
+//     await tree.insert(0x3);
+
+//     // console.log('\nAfter insertions:');
+//     console.log(tree.serialize(), { depth: null });
+//     let index = tree.getIndex(0x1);
+//     console.log(index);
+//     console.log(tree.getPath(index));
+// })();
+
+
+
+
