@@ -4,6 +4,7 @@ include "../../node_modules/circomlib/circuits/eddsaposeidon.circom";
 include "../../node_modules/circomlib/circuits/poseidon.circom";
 include "./merkleChecker.circom";
 include "./commitmentChecker.circom";
+include "./getSign.circom";
 
 template Transfer(n) {
 
@@ -25,22 +26,25 @@ template Transfer(n) {
     signal input root;
     signal input merkleSiblings[n];
     signal input merkleSiblingIsLeft[n];
-	signal input levelsUsed;
 
     // signature
     signal input signatureR[2];
     signal input signatureS;
 
     // transfer
+    signal input amountSent;
+    signal input amountChange;
+
+    // sender
     signal input senderCommitment1;
     signal input senderNullifier1;
-    signal input amountBack;
-    signal input amountSent;
 
     // receiver 
     signal input receiverCommitment0;
     signal input receiverPub[2];
     signal input receiverNullifier0;
+
+    signal output isValid;
 
     /////////////////////
     // Signature Check //
@@ -75,7 +79,7 @@ template Transfer(n) {
     // Sender Back Commitment Check //
     //////////////////////////////////
     component commitmentCheckerSender1 = CommitmentChecker();
-    commitmentCheckerSender1.amount <== amountBack;
+    commitmentCheckerSender1.amount <== amountChange;
     commitmentCheckerSender1.pub[0] <== senderPub[0];
     commitmentCheckerSender1.pub[1] <== senderPub[1];
     commitmentCheckerSender1.nullifier <== senderNullifier1;
@@ -97,7 +101,6 @@ template Transfer(n) {
     component merkleChecker = MerkleChecker(n);
     merkleChecker.element <== senderCommitment0;
     merkleChecker.root <== root;
-    merkleChecker.levelsUsed <== levelsUsed;
     for (var i = 0; i < n; i++) {
         merkleChecker.merkleSiblings[i] <== merkleSiblings[i];
         merkleChecker.merkleSiblingIsLeft[i] <== merkleSiblingIsLeft[i];
@@ -106,7 +109,21 @@ template Transfer(n) {
     //////////////////
     // Amount Check //
     //////////////////
-    amount === amountBack + amountSent;
+    // We don't allow -ve amounts; prevents underflow/overflow cheats
+    component signWithdrawal = GetSign();
+    signWithdrawal.num <== amountSent;
+    signWithdrawal.sign === 0;
+
+    component signAmount = GetSign();
+    signAmount.num <== amount;
+    signAmount.sign === 0;
+
+    component signChange = GetSign();
+    signChange.num <== amountChange;
+    signChange.sign === 0;
+    
+    amount === amountChange + amountSent;
+    isValid <== 42;
 }
 
 component main = Transfer(4);

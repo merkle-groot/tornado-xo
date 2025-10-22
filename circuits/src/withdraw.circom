@@ -3,8 +3,10 @@ pragma circom 2.0.4;
 include "../../node_modules/circomlib/circuits/eddsaposeidon.circom";
 include "../../node_modules/circomlib/circuits/poseidon.circom";
 include "../../node_modules/circomlib/circuits/sign.circom";
+include "../../node_modules/circomlib/circuits/comparators.circom";
 include "./merkleChecker.circom";
 include "./commitmentChecker.circom";
+include "./getSign.circom";
 
 template Withdraw(n) {
     /////////////
@@ -93,6 +95,19 @@ template Withdraw(n) {
     //////////////////
     // Amount Check //
     //////////////////
+    // We don't allow -ve amounts; prevents underflow/overflow cheats
+    component signWithdrawal = GetSign();
+    signWithdrawal.num <== amountWithdrawal;
+    signWithdrawal.sign === 0;
+
+    component signAmount = GetSign();
+    signAmount.num <== amount;
+    signAmount.sign === 0;
+
+    component signChange = GetSign();
+    signChange.num <== amountChange;
+    signChange.sign === 0;
+    
     amount === amountWithdrawal + amountChange;
     isValid <== 42;
 }

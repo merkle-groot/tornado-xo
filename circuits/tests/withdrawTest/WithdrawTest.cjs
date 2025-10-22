@@ -1,11 +1,11 @@
 const chai = require("chai");
 const path = require("path");
 const wasm_tester = require("circom_tester").wasm;
-const MerkleTree = require("../helpers/fixedMerkleTree.cjs");
-const { generateKeypair, sign, toField, verify, convertToPoseidonObject } = require("../helpers/eddsa.cjs");
-const { hash } = require("../helpers/poseidon.cjs");
-const { getCommitment } = require("../helpers/desposit.cjs");
-const { parseUnits } = require("../helpers/utils.cjs");
+const MerkleTree = require("../../helpers/fixedMerkleTree.cjs");
+const { generateKeypair, sign, convertToPoseidonObject } = require("../../helpers/eddsa.cjs");
+const { hash } = require("../../helpers/poseidon.cjs");
+const { getCommitment } = require("../../helpers/desposit.cjs");
+const { parseUnits } = require("../../helpers/utils.cjs");
 const assert = chai.assert;
 
 // Cache the circuit to avoid recompiling
@@ -19,11 +19,11 @@ const p = 2188824287183927522224640574525727508854836440041603434369820418657580
 // Before all tests, compile the circuit once
 before(async function() {
     this.timeout(100000);
-    circuit = await wasm_tester(path.join(__dirname, "../src/withdraw.circom"), {
+    circuit = await wasm_tester(path.join(__dirname, "../../src/withdraw.circom"), {
         verbose: true,
         logs: true
     });
-    commitmentTesterCircuit = await wasm_tester(path.join(__dirname, "../src/testCircuits/desposit.circom"));
+    commitmentTesterCircuit = await wasm_tester(path.join(__dirname, "../../src/testCircuits/desposit.circom"));
     aliceKeyPair = await generateKeypair("1");
     bobKeyPair = await generateKeypair("2");
     merkleTree = new MerkleTree(4);
@@ -60,7 +60,7 @@ describe("Withdraw circuit test", function () {
         workingParams = {
             senderCommitment0: commitment,
             senderNullifierHash0: nullifierHash,
-            senderNullfier0: 123456,
+            senderNullfier0: nullifier,
             amount: depositAmount,
             senderPub: [aliceKeyPair["publicKey"][0], aliceKeyPair["publicKey"][1]],
             root: root,
@@ -74,7 +74,7 @@ describe("Withdraw circuit test", function () {
             receiverPub: [bobKeyPair["publicKey"][0], bobKeyPair["publicKey"][1]],
             receiverNullifier0: changeNullifier
         };
-    })
+    });
 
     it("Should output the right hash", async function () {
         const depositAmount = parseUnits(10, 6);
@@ -139,12 +139,12 @@ describe("Withdraw circuit test", function () {
         }
     });
 
-    it("withdraw more than the deposited amount", async function () {
+    it("withdraw more than the deposited amount (overflow)", async function () {
          try {
             // original amount: 10
-            // withdrawal amount: 20
-            // change amount: 10
-            const amountWithdrawal = p - 9000000;
+            // withdrawal amount: p-10
+            // change amount: 20
+            const amountWithdrawal = p - 1000000;
             const changeAmount = parseUnits(20, 6);
             const changeNullifier = workingParams.receiverNullifier0;
             const { commitment: changeCommitment, nullifierHash: changeNullifierHash } = await getCommitment(changeAmount, bobKeyPair, changeNullifier);
@@ -156,6 +156,28 @@ describe("Withdraw circuit test", function () {
                     ...workingParams, 
                 }
             );
+        } catch (error){
+            // Expected behavior - circuit should fail with incorrect signature
+            assert.isTrue(error.message.includes("Assert Failed") || error.message.includes("constraint"),
+                        `Expected constraint violation error, but got: ${error.message}`);
+        }
+    });
+
+    it("Should fail for incorrect sender commitment hash 1", async function () {
+        try {
+            const { commitment, nullifierHash } = await getCommitment(parseUnits(100, 6), bobKeyPair, 124n);
+            const w = await circuit.calculateWitness({...workingParams, senderNullifierHash0: commitment, senderNullfier0: nullifierHash});
+        } catch (error){
+            // Expected behavior - circuit should fail with incorrect signature
+            assert.isTrue(error.message.includes("Assert Failed") || error.message.includes("constraint"),
+                        `Expected constraint violation error, but got: ${error.message}`);
+        }
+    });
+
+    it("Should fail for incorrect sender commitment hash 1", async function () {
+        try {
+            const { commitment, nullifierHash } = await getCommitment(parseUnits(120, 6), aliceKeyPair, 67n);
+            const w = await circuit.calculateWitness({...workingParams, receiverCommitment0: commitment, receiverNullifier0: nullifierHash});
         } catch (error){
             // Expected behavior - circuit should fail with incorrect signature
             assert.isTrue(error.message.includes("Assert Failed") || error.message.includes("constraint"),
