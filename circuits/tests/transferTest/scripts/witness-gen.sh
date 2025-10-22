@@ -9,9 +9,10 @@ fi
 
 # Define folder prefix
 OUTPUT_DIR="./testOutput"
-CIRCUIT_DIR="./circuits/src/transfer.circom"
+CIRCUIT_DIR="../src/transfer.circom"
 MERGED_DIR="$OUTPUT_DIR/merged_inputs"
-CONFIG_DIR="./circuits/tests/transferTest/configs"
+CONFIG_DIR="./configs"
+LIB_DIR="./lib"
 WITNESS_DIR="$OUTPUT_DIR/witness"
 
 echo "Generating witnesses for all parties..."

@@ -10,9 +10,11 @@ let merkleTree = null;
 const keyPairs = [];
 const commitmentsList = [];
 const p = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
-const compileScript = "circuits/tests/transferTest/scripts/compile.sh"
-const inputProcessingScript = "circuits/tests/transferTest/scripts/split-and-merge.sh"
-const witnessScript = "circuits/tests/transferTest/scripts/witness-gen.sh"
+const compileScript = "circuits/tests/transferTest/scripts/compile.sh";
+const inputProcessingScript = "circuits/tests/transferTest/scripts/split-and-merge.sh";
+const witnessScript = "circuits/tests/transferTest/scripts/witness-gen.sh";
+const trustedSetup = "circuits/tests/transferTest/scripts/trusted-setup.sh";
+const proofGen = "circuits/tests/transferTest/scripts/proof.sh";
 
 const getRandomNumber = (min, max) => {
     return parseInt(Math.random() * (max - min) + min);
@@ -110,6 +112,8 @@ const runTransferMPC = async() => {
     // split the input 1&2 to shares and merge them
     await runBashScript(inputProcessingScript);
     await runBashScript(witnessScript);
+    await runBashScript(trustedSetup);
+    await runBashScript(proofGen);
 }
 
 const writeToJson = async(fileName, content) => {

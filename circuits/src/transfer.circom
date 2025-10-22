@@ -126,4 +126,4 @@ template Transfer(n) {
     isValid <== 42;
 }
 
-component main = Transfer(4);
+component main{public [root, senderCommitment0, senderNullifierHash0, senderCommitment1, receiverCommitment0]} = Transfer(4);
