@@ -16,7 +16,6 @@ async function hashN(elements) {
 
 // Hash n field elements
 async function hash(left, right) {
-    console.log("hashing data: ", left, right);
     if (!poseidon) {
         await initializePoseidon();
     }

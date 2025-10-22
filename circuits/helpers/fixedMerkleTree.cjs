@@ -40,7 +40,7 @@ class MerkleTree {
             this._layers[0][index] = elements[i];
 
             index >>= 1;
-            for(let i = 1; i <= levels; ++i){
+            for(let i = 1; i <= this.levels; ++i){
                 if(index % 2 == 0){
                     break;
                 }
@@ -62,8 +62,7 @@ class MerkleTree {
     async _insert(element, index) {
         this._layers[0][index] = element;
         for(let i = 1; i <= this.levels; ++i){
-            console.log("debug, level: ", i);
-            this._layers[i] = this._layers[i] ? this._layers[i]: [];
+            if (!this._layers[i]) this._layers[i] = [];
             index >>= 1;
             this._layers[i][index] = await this._hash(
                 this._layers[i - 1][2 * index],
@@ -89,26 +88,24 @@ class MerkleTree {
 
     getPath(index) {
         if(index < 0 || index > this.capacity){
-            throw new Error("invalid index"); 
+            throw new Error("invalid index");
         }
 
         let isLeft = [];
         let siblings = [];
         for(let i = 0; i < this.levels; ++i){
-            console.log(index + 1);
             if(index % 2){
                 isLeft.push(false);
                 siblings.push(this._layers[i][index - 1]);
             } else {
                 isLeft.push(true);
                 siblings.push(
-                    index + 1 < this._layers[i].length ? 
+                    index + 1 < this._layers[i].length ?
                         this._layers[i][index + 1] : this._zeroSubTrees[i]
                 );
             }
+            index >>= 1;
         }
-
-        index >>= 1;
 
         return {
             isLeft,
